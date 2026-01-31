@@ -7,6 +7,6 @@ data:
   DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/loadtest"
   REDIS_URL: "redis://redis:6379/0"
   DOWNSTREAM_SERVICE_URL: "http://downstream-service:8001"
-  WORKER_COUNT: "4"
+  WORKER_COUNT: "1"
   DB_POOL_SIZE: "5"
   DB_MAX_OVERFLOW: "10"

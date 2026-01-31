@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/loadtest"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/loadtest"
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
     
