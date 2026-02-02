@@ -1,432 +1,173 @@
-# Backend Load Testing
+# Backend Under Load
 
-A comprehensive FastAPI application for demonstrating backend system behavior under load, with intentional failure modes for learning and testing.
+A FastAPI application for testing backend system behavior under different stress conditions. This project demonstrates common failure modes: CPU saturation, memory exhaustion, database pool depletion, and cascading failures from downstream services.
 
-## 🏗️ Architecture
+## 📌 What This Repo Does
 
-This project uses a **microservices architecture** with two separate repositories:
+This is a learning project that intentionally creates failure scenarios to understand how backend systems degrade under load. It includes:
 
-1. **[backend-load-testing](https://github.com/yourusername/backend-load-testing)** (this repo)
-   - Main FastAPI application
-   - Load testing scenarios
-   - Kubernetes deployments
-   - Monitoring and observability
+- A **FastAPI application** with multiple test endpoints
+- **k6 load testing scripts** for CPU, memory, I/O, database, and cascade failure scenarios
+- **Prometheus metrics** for observability
+- **Kubernetes manifests** for deployment to Minikube
+- **Real test results** showing system behavior under various stress patterns
 
-2. **[downstream-slow-service](https://github.com/yourusername/downstream-slow-service)**
-   - Mock external API service
-   - Simulates slow downstream dependencies
-   - Used for cascade failure testing
+## 🧪 Load Testing Approach
 
-### Why Two Repositories?
+All tests use **k6**, a load testing tool that simulates concurrent users and measures system behavior.
 
-✅ **Realistic microservices pattern** - Mimics production architecture  
-✅ **Independent deployment** - Each service has its own lifecycle  
-✅ **Version control** - Services can evolve independently  
-✅ **Learning opportunity** - Practice inter-service communication  
+### Test Scenarios
 
-## 🎯 Project Goals
+| Test | Description | Result |
+|------|-------------|--------|
+| **CPU Stress** | 50 req/s for 5 min, random CPU complexity | Connection resets - system overwhelmed |
+| **Memory Stress** | Ramp to 20 VUs, request 10-30 MB allocations | Worse than CPU - rapid failure |
+| **Cascade Failure** | Ramp to 100 req/s, downstream service calls | System collapses under cascading failures |
+| **DB Pool Exhaustion** | 100 VUs with 30 concurrent DB queries | Requests timeout - connection pool starved |
 
-- Understand how backend systems behave under different types of load
-- Identify and demonstrate common bottlenecks (CPU, memory, I/O, database)
-- Show how horizontal scaling changes failure modes
-- Learn proper observability and monitoring techniques
+## 🔍 Observability & Monitoring
 
-## 📋 Prerequisites
+**Prometheus** scrapes metrics from the `/metrics` endpoint:
+- HTTP request duration and error rates
+- Active database connections
+- Custom application metrics (complexity, allocations, etc.)
 
-- **Docker Desktop**
-- **Minikube** (or other Kubernetes cluster)
-- **kubectl**
-- **k6** (load testing tool)
-- **Python 3.11+**
+Monitor during tests at: `http://localhost:9090`
 
-### Quick Installation
+## 🚀 Quick Setup
+
+### Prerequisites
 
 ```bash
-# macOS
-brew install minikube kubectl k6
-
-# Ubuntu/Debian
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-sudo install minikube-linux-amd64 /usr/local/bin/minikube
+# Install required tools
+brew install minikube kubectl k6  # macOS
+# or apt-get on Linux
 ```
 
-## 🚀 Quick Start
-
-### Option 1: Automated Setup (Recommended)
+### Local Development
 
 ```bash
-# 1. Clone this repository
-git clone https://github.com/yourusername/backend-load-testing.git
-cd backend-load-testing
+# 1. Install dependencies
+pip install -r requirements.txt
 
-# 2. Make scripts executable
-chmod +x scripts/*.sh
+# 2. Run the app
+python -m uvicorn app.main:app --reload --port 8000
 
-# 3. Setup Minikube (downloads downstream repo automatically)
-./scripts/setup-minikube.sh
-
-# 4. Deploy everything
-./scripts/deploy-all.sh
-
-# 5. Run load tests
-./scripts/load-test.sh
+# 3. In another terminal, run a load test
+BASE_URL=http://127.0.0.1:8000 k6 run load-tests/cpu-stress.js
 ```
 
-### Option 2: Manual Setup
+### Minikube Deployment
 
 ```bash
-# 1. Setup Minikube
-./scripts/setup-minikube.sh
+# 1. Start Minikube
+minikube start
 
-# 2. Deploy downstream service
-./scripts/deploy-downstream.sh
+# 2. Deploy PostgreSQL, Redis, and the app
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/postgres.yaml
+kubectl apply -f k8s/redis.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
 
-# 3. Deploy main application
-./scripts/deploy.sh
+# 3. Port-forward to access locally
+kubectl port-forward -n load-testing svc/backend 8000:80
 
-# 4. Verify deployment
-kubectl get pods -n load-testing
-
-# 5. Test connectivity
-./scripts/test-downstream.sh
+# 4. Run load tests (set BASE_URL to your service address)
+BASE_URL=http://127.0.0.1:8000 k6 run load-tests/cpu-stress.js
+# Or if using port-forward on different port:
+# BASE_URL=http://127.0.0.1:57806 k6 run load-tests/cpu-stress.js
 ```
 
-### Option 3: Local Development (Docker Compose)
+## 📊 Key Findings
+
+### Single Pod Behavior
+- **CPU stress**: System remains operational but with massive error rates when CPU is exhausted
+- **Memory stress**: More destructive than CPU - quick memory exhaustion causes widespread failures
+- **Database pool**: Creates silent failures - requests hang indefinitely instead of failing fast
+
+### Scaling Impact (Multiple Pods)
+
+When horizontal scaling to **3 pods**, the database connection pool issue **becomes worse**, not better:
+
+- Each pod gets its own connection pool (5 connections per pod)
+- With 3 pods: 15 total connections to shared PostgreSQL
+- Load distributes across pods, but all compete for same limited database pool
+- **Result**: Request timeouts increase as more pods fight for database connections
+
+**Key Insight**: Scaling out without scaling the database bottleneck makes things worse.
+
+## 📁 Project Structure
+
+## 🛠️ Tech Stack
+
+- **Backend**: FastAPI (Python)
+- **Load Testing**: k6 
+- **Observability**: Prometheus metrics
+- **Database**: PostgreSQL
+- **Cache**: Redis
+- **Orchestration**: Kubernetes / Minikube
+
+## 📂 Directory Structure
+
+```
+.
+├── app/main.py              # FastAPI app with test endpoints
+├── load-tests/              # k6 load test scripts
+├── k8s/                     # Kubernetes manifests
+└── docker/Dockerfile        # Container image
+```
+
+## 🏃 Running Tests
 
 ```bash
-# 1. Clone both repositories
-git clone https://github.com/yourusername/backend-load-testing.git
-git clone https://github.com/yourusername/downstream-slow-service.git
+# Set your app URL (update the port if different)
+export BASE_URL=http://127.0.0.1:8000
 
-# 2. Create docker-compose.yml (see below)
+# CPU stress test
+k6 run load-tests/cpu-stress.js
 
-# 3. Run all services
-docker-compose up --build
+# Memory stress test
+k6 run load-tests/memory-stress.js
 
-# 4. Test
-curl http://localhost:8000/health
-curl http://localhost:8001/health
+# Cascade failure test
+k6 run load-tests/cascade-failure.js
+
+# Database pool exhaustion test
+k6 run load-tests/db-pool-exhaust.js
 ```
 
-**docker-compose.yml** (for local development):
-```yaml
-version: '3.8'
+## 🎯 What We Learned
 
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: loadtest
-    ports:
-      - "5432:5432"
+### The Database Bottleneck Problem
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+The most critical finding: **Horizontal scaling amplifies database pool exhaustion**.
 
-  downstream:
-    build:
-      context: ../downstream-slow-service
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8001:8001"
-    environment:
-      DEFAULT_DELAY: "3"
+With a single pod at default pool size (5 connections):
+- System can handle moderate load
+- Database becomes bottleneck at high concurrency
 
-  backend:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/loadtest"
-      REDIS_URL: "redis://redis:6379/0"
-      DOWNSTREAM_SERVICE_URL: "http://downstream:8001"
-    depends_on:
-      - postgres
-      - redis
-      - downstream
-```
+With 3 pods scaled horizontally:
+- Connection pool becomes WORSE, not better
+- 3 pods × 5 connections = 15 total connections
+- All pods compete for same limited PostgreSQL pool
+- Load spreads across pods but pools don't scale proportionally
+- **Result**: More timeouts, not fewer
 
-## 📊 Available Endpoints
+**Solution**: Scale database connection pools alongside application scaling, or use a connection pooler like PgBouncer.
 
-### Main Service (Port 8000)
+### Failure Mode Comparison
 
-#### Health & Metrics
-- `GET /` - Service information
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
+| Scenario | Behavior | Recovery |
+|----------|----------|----------|
+| CPU Stress | Errors & slowness | Requests eventually complete |
+| Memory Stress | OOMKilled pods | Pods restart, cascading failures |
+| Cascading | Downstream failures propagate | Timeout errors |
+| DB Pool | Silent hangs (timeouts) | Requests eventually timeout/fail |
 
-#### CPU-Bound Operations
-- `GET /api/cpu-intensive?complexity=30` - Fibonacci calculation
-- `GET /api/hash?iterations=10000` - CPU-intensive hashing
-- `GET /api/json-processing?size=1000` - JSON serialization
-
-#### I/O-Bound Operations
-- `GET /api/slow?delay=5` - Simulated slow I/O
-- `GET /api/random-delay` - Random delay
-- `GET /api/blocking?duration=5` - Blocking operation
-- `GET /api/parallel-io?count=5` - Parallel I/O
-
-#### Downstream Dependencies
-- `GET /api/call-downstream?timeout=5` - Call downstream service
-- `GET /api/cascade-failure` - Multiple downstream calls
-- `GET /api/no-timeout` - No timeout configured (dangerous)
-
-#### Memory Operations
-- `GET /api/memory-leak?size_mb=10` - Intentional memory leak
-- `GET /api/memory-spike?size_mb=50` - Temporary spike
-- `POST /api/clear-memory` - Clear memory leaks
-
-#### Database Operations
-- `POST /api/tasks` - Create task
-- `GET /api/tasks?limit=10` - List tasks
-- `GET /api/db-pool-exhaust?concurrent_queries=10` - Exhaust pool
-- `GET /api/expensive-query?iterations=1000` - Expensive query
-
-### Downstream Service (Port 8001 - Internal)
-- `GET /slow?delay=5` - Configurable delay
-- `GET /random` - Random delay
-- `GET /sometimes-fail?failure_rate=0.3` - Random failures
-- `GET /timeout-trap` - 60 second response
-
-## 🧪 Load Testing Scenarios
-
-### 1. Baseline Performance
-```bash
-k6 run load-tests/k6/baseline.js
-```
-**Purpose**: Establish baseline metrics  
-**Metrics**: RPS, latency (p50, p95, p99), error rate
-
-### 2. CPU Stress
-```bash
-k6 run load-tests/k6/cpu-stress.js
-```
-**Purpose**: Demonstrate CPU throttling  
-**Observation**: Response degradation, CPU limits
-
-### 3. Memory Stress
-```bash
-k6 run load-tests/k6/memory-stress.js
-```
-**Purpose**: Demonstrate OOM kills  
-**Observation**: Pod restarts, memory limits
-
-### 4. I/O Stress
-```bash
-k6 run load-tests/k6/io-stress.js
-```
-**Purpose**: Worker pool exhaustion  
-**Observation**: Request queuing, timeouts
-
-### 5. Database Pool Exhaustion
-```bash
-k6 run load-tests/k6/db-pool-exhaust.js
-```
-**Purpose**: Connection pool limits  
-**Observation**: Connection wait times, timeouts
-
-### 6. Cascade Failure
-```bash
-k6 run load-tests/k6/cascade-failure.js
-```
-**Purpose**: Downstream failure propagation  
-**Observation**: How failures cascade upstream
-
-## 📈 Monitoring
-
-### View Metrics
-```bash
-# Prometheus metrics
-curl http://$(minikube ip):30000/metrics
-
-# Pod resource usage
-kubectl top pods -n load-testing
-
-# Watch HPA scaling
-kubectl get hpa -n load-testing --watch
-```
-
-### View Logs
-```bash
-# Main application
-kubectl logs -f deployment/backend-app -n load-testing
-
-# Downstream service
-kubectl logs -f deployment/downstream-service -n load-testing
-
-# All services
-stern -n load-testing .
-```
-
-### Real-time Monitoring
-```bash
-./scripts/monitor.sh --watch
-```
-
-## 🎓 Learning Scenarios
-
-### Scenario 1: CPU Throttling
-```bash
-# Limit CPU to 100m
-kubectl set resources deployment backend-app -n load-testing --limits=cpu=100m
-
-# Run CPU stress test
-k6 run load-tests/k6/cpu-stress.js
-
-# Observe: Response times increase, CPU at 100%, throttling
-```
-
-### Scenario 2: OOMKilled
-```bash
-# Run memory leak test
-for i in {1..20}; do
-  curl "http://$(minikube ip):30000/api/memory-leak?size_mb=50"
-  sleep 2
-done
-
-# Observe: kubectl get pods --watch shows OOMKilled
-```
-
-### Scenario 3: Downstream Service Failure
-```bash
-# Stop downstream service
-kubectl scale deployment downstream-service -n load-testing --replicas=0
-
-# Try cascade endpoint
-curl "http://$(minikube ip):30000/api/cascade-failure"
-
-# Observe: All requests fail, timeouts, error propagation
-```
-
-### Scenario 4: Horizontal Scaling
-```bash
-# Enable HPA
-kubectl apply -f k8s/hpa.yaml
-
-# Generate load
-k6 run --vus 100 --duration 10m load-tests/k6/baseline.js
-
-# Watch scaling
-kubectl get hpa -n load-testing --watch
-# Observe: Replicas increase 1 → 10, latency improves
-```
-
-## 🔧 Common Commands
-
-```bash
-# Get service URL
-minikube service backend-service -n load-testing --url
-
-# Port forward for debugging
-kubectl port-forward svc/backend-service 8000:8000 -n load-testing
-
-# Restart deployment
-kubectl rollout restart deployment/backend-app -n load-testing
-
-# Scale manually
-kubectl scale deployment backend-app -n load-testing --replicas=5
-
-# View events
-kubectl get events -n load-testing --sort-by='.lastTimestamp'
-
-# Describe pod issues
-kubectl describe pod <pod-name> -n load-testing
-
-# Exec into pod
-kubectl exec -it <pod-name> -n load-testing -- /bin/bash
-```
-
-## 📊 Key Metrics to Track
-
-| Metric | Description | Target |
-|--------|-------------|--------|
-| **Request Rate** | Requests/second | > 100 RPS |
-| **Latency p95** | 95th percentile | < 500ms |
-| **Latency p99** | 99th percentile | < 1000ms |
-| **Error Rate** | Failed requests % | < 0.1% |
-| **CPU Usage** | % of limit | < 80% |
-| **Memory Usage** | % of limit | < 80% |
-
-## 🐛 Troubleshooting
-
-### Pods Not Starting
-```bash
-kubectl describe pod <pod-name> -n load-testing
-kubectl logs <pod-name> -n load-testing
-```
-
-**Common issues:**
-- Image not found: Run `./scripts/setup-minikube.sh` again
-- Database not ready: Wait longer or check postgres pod
-- Downstream service missing: Run `./scripts/deploy-downstream.sh`
-
-### Downstream Service Connection Failed
-```bash
-# Test connectivity
-./scripts/test-downstream.sh
-
-# Check service
-kubectl get svc downstream-service -n load-testing
-
-# Check endpoints
-kubectl get endpoints downstream-service -n load-testing
-```
-
-### Load Tests Failing
-```bash
-# Verify service accessible
-curl http://$(minikube ip):30000/health
-
-# Check NodePort
-kubectl get svc backend-service -n load-testing
-```
-
-## 🧹 Cleanup
-
-```bash
-# Delete all resources
-./scripts/cleanup.sh
-
-# Or manually
-kubectl delete namespace load-testing
-
-# Stop Minikube
-minikube stop
-
-# Delete cluster
-minikube delete
-```
-
-## 📝 Project Structure
-
-```
-backend-load-testing/
-├── app/                    # Main FastAPI application
-├── k8s/                    # Kubernetes manifests
-├── docker/                 # Dockerfile
-├── load-tests/            # K6 test scripts
-├── scripts/               # Automation scripts
-└── README.md
-```
+**Key Insight**: Database connection exhaustion is the most insidious because it doesn't fail fast—it hangs.
 
 **Related Repository**: [downstream-slow-service](https://github.com/yourusername/downstream-slow-service)
-
-## 🎯 LinkedIn Content Plan
-
-This project demonstrates 6 key concepts for LinkedIn posts:
-
-1. **Architecture & Setup** - Two-repo microservices structure
-2. **CPU & Memory Limits** - Resource exhaustion scenarios
-3. **Concurrency Issues** - Connection pools, worker limits
-4. **Distributed Failures** - Cascade failures, timeouts
-5. **Scaling Strategies** - HPA in action, when scaling helps
-6. **Lessons Learned** - Production-ready best practices
 
 ## 🤝 Contributing
 
@@ -442,10 +183,7 @@ MIT License
 
 ## 🔗 Links
 
-- **Downstream Service**: [downstream-slow-service](https://github.com/yourusername/downstream-slow-service)
-- **Author**: Your Name
-- **LinkedIn**: [Your Profile](#)
-- **Blog Posts**: Coming soon!
+- **Downstream Service**: [downstream-slow-service](https://github.com/Aditya19042001/downstream-service)
 
 ---
 
