@@ -184,7 +184,6 @@ MIT License
 ## 🔗 Links
 
 - **Downstream Service**: [downstream-slow-service](https://github.com/Aditya19042001/downstream-service)
-
 ---
 
 **Happy Load Testing! 🚀**
