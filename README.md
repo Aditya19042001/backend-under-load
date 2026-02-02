@@ -167,6 +167,43 @@ With 3 pods scaled horizontally:
 
 **Key Insight**: Database connection exhaustion is the most insidious because it doesn't fail fast—it hangs.
 
+## 📸 Test Results & Metrics
+
+### CPU Stress Test
+- **Load Profile**: 50 req/s constant for 5 minutes
+- **Peak VUs**: 100
+- **Observation**: Connection resets, system overwhelmed
+
+![CPU Stress Test](results/CPU.png)
+
+### CPU Snapshot
+- **Real-time CPU usage during test**
+
+![CPU Snapshot](results/CPU%20Snapshot.png)
+
+### Memory Stress Test
+- **Load Profile**: Ramp 0→20 VUs over 2m, then 5m sustained
+- **Memory per Request**: 10-30 MB allocations
+- **Observation**: More destructive than CPU stress, rapid pod failures
+
+![Memory Stress Test](results/Memory.png)
+
+### OOM Killer (Out of Memory)
+- **Result**: Pods crash when memory limit exceeded
+- **Recovery**: Pod restart and immediate re-crash on next load
+
+![OOM Killer Event](results/OOM.png)
+
+### Cascade Failure Test
+- **Load Profile**: Ramp 10→50→100→50 req/s
+- **Test Duration**: 7 minutes
+- **Observation**: Downstream service calls propagate failures upstream
+
+### DB Pool Exhaustion Test
+- **Load Profile**: 100 VUs with 30 concurrent queries
+- **DB Pool Size**: 5 connections per pod
+- **Observation**: All requests timeout at 30s, connection queue backs up
+
 **Related Repository**: [downstream-slow-service](https://github.com/yourusername/downstream-slow-service)
 
 ## 🤝 Contributing
@@ -189,3 +226,26 @@ MIT License
 **Happy Load Testing! 🚀**
 
 Remember: The goal is to learn how systems fail so you can build better, more resilient production systems.
+
+---
+
+## 📝 Capturing Test Results
+
+To capture screenshots of test results for documentation:
+
+```bash
+# Run test and capture output
+BASE_URL=http://127.0.0.1:8000 k6 run load-tests/cpu-stress.js 2>&1 | tee results/cpu-stress-results.txt
+
+# Screenshot k6 output showing:
+# - Total requests and success/failure rates
+# - HTTP request duration metrics (p95, p99)
+# - VU statistics
+# - Any error messages or timeouts
+```
+
+Create `results/` directory and store:
+- `results/cpu-stress-screenshot.png` - CPU test output
+- `results/memory-stress-screenshot.png` - Memory test output
+- `results/db-pool-screenshot.png` - Database pool test output
+- `results/cascade-failure-screenshot.png` - Cascade failure test output
