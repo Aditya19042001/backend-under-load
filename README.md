@@ -228,24 +228,3 @@ MIT License
 Remember: The goal is to learn how systems fail so you can build better, more resilient production systems.
 
 ---
-
-## 📝 Capturing Test Results
-
-To capture screenshots of test results for documentation:
-
-```bash
-# Run test and capture output
-BASE_URL=http://127.0.0.1:8000 k6 run load-tests/cpu-stress.js 2>&1 | tee results/cpu-stress-results.txt
-
-# Screenshot k6 output showing:
-# - Total requests and success/failure rates
-# - HTTP request duration metrics (p95, p99)
-# - VU statistics
-# - Any error messages or timeouts
-```
-
-Create `results/` directory and store:
-- `results/cpu-stress-screenshot.png` - CPU test output
-- `results/memory-stress-screenshot.png` - Memory test output
-- `results/db-pool-screenshot.png` - Database pool test output
-- `results/cascade-failure-screenshot.png` - Cascade failure test output
