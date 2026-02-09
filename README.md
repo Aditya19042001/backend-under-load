@@ -177,7 +177,8 @@ With 3 pods scaled horizontally:
 ![CPU Stress Test](results/CPU.png)
 
 ### CPU Snapshot
-- **Real-time CPU usage during test**
+- **Real-time CPU usage during test :**
+Even though the pod was limited to 0.5 CPU, concurrent requests pushed CPU demand close to the limit, leading to throttling, increased latency, and degraded performance without crashing the pod.
 
 ![CPU Snapshot](results/CPU%20Snapshot.png)
 
